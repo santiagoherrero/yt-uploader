@@ -20,19 +20,25 @@ en privado y te avisa por Telegram con el progreso.
 
 ## Instalación
 
-Todo se hace por SSH, sin browser en la mini PC.
+Todo se hace por SSH, sin browser en la mini PC. Un solo comando:
 
 ```bash
-# 1. Cloná el repo en la mini PC
+curl -fsSL https://raw.githubusercontent.com/santiagoherrero/yt-uploader/main/bootstrap.sh | sudo bash
+```
+
+Eso clona el repo en `/opt/yt-uploader/src`, instala dependencias y arranca el
+wizard interactivo.
+
+<details>
+<summary>Instalación manual paso a paso (alternativa)</summary>
+
+```bash
 git clone https://github.com/santiagoherrero/yt-uploader.git /opt/yt-uploader/src
 cd /opt/yt-uploader/src
-
-# 2. Corré el instalador (apt deps, venv, systemd unit)
 sudo ./install.sh
-
-# 3. Corré el wizard interactivo (guía completa para credenciales y config)
 sudo /opt/yt-uploader/venv/bin/yt-uploader-setup
 ```
+</details>
 
 El wizard te pide:
 - Path al `client_secret.json` que descargaste de Google Cloud (paso a paso te
