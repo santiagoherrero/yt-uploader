@@ -21,8 +21,9 @@ install -d -m 755 /var/lib/yt-uploader/staging
 
 echo "==> Creando virtualenv en /opt/yt-uploader/venv..."
 python3 -m venv /opt/yt-uploader/venv
-/opt/yt-uploader/venv/bin/pip install --quiet --upgrade pip
-/opt/yt-uploader/venv/bin/pip install --quiet -e "$SRC_DIR"
+/opt/yt-uploader/venv/bin/pip install --upgrade pip
+echo "==> Instalando dependencias Python (esto puede tardar 2-5 minutos)..."
+/opt/yt-uploader/venv/bin/pip install -e "$SRC_DIR"
 
 echo "==> Instalando systemd unit..."
 cp "$SRC_DIR/systemd/yt-uploader.service" /etc/systemd/system/yt-uploader.service
