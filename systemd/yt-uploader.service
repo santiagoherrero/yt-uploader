@@ -1,0 +1,17 @@
+[Unit]
+Description=YouTube Auto Uploader
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/yt-uploader/venv/bin/yt-uploader --config /etc/yt-uploader/config.toml
+Restart=on-failure
+RestartSec=10
+User=root
+Group=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

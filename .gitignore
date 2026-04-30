@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+
+config.toml
+client_secret*.json
+token.json
+*.token
+uploaded.json
+
+.DS_Store
+.idea/
+.vscode/

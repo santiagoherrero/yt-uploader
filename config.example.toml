@@ -1,0 +1,28 @@
+# Copy to /etc/yt-uploader/config.toml and fill in.
+
+[youtube]
+client_secret_path = "/etc/yt-uploader/client_secret.json"
+token_path = "/etc/yt-uploader/token.json"
+default_privacy = "private"          # private | unlisted | public
+title_template = "Prédica – {date}"  # {date} is YYYY-MM-DD from file mtime
+description = ""
+category_id = "29"                   # 29 = Nonprofits & Activism, 22 = People & Blogs
+made_for_kids = false
+
+[telegram]
+bot_token = "PASTE_BOT_TOKEN_HERE"
+chat_id  = "PASTE_CHAT_ID_HERE"
+
+[paths]
+staging_dir = "/var/lib/yt-uploader/staging"
+state_file  = "/var/lib/yt-uploader/uploaded.json"
+
+[detection]
+video_extensions    = [".mp4", ".mov", ".mkv", ".m4v", ".avi", ".braw"]
+mount_settle_seconds = 5             # wait this long after add event before scanning
+read_only_mount      = true          # mount external disks read-only when we mount them
+
+[upload]
+chunk_size_mb        = 8
+progress_step_pct    = 10            # edit Telegram message every N% progress
+max_retries          = 5
