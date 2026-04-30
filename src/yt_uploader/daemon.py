@@ -6,19 +6,24 @@ from typing import Optional
 
 import pyudev
 
+from .notifier import TelegramNotifier, esc
 from .processor import Processor
 
 log = logging.getLogger(__name__)
+
+ALLOWED_BUSES = {"usb", "mmc"}
 
 
 class DiskWatcher:
     def __init__(
         self,
         processor: Processor,
+        telegram: TelegramNotifier,
         settle_seconds: int,
         read_only: bool,
     ) -> None:
         self._processor = processor
+        self._tg = telegram
         self._settle = settle_seconds
         self._read_only = read_only
 
@@ -28,38 +33,75 @@ class DiskWatcher:
         monitor.filter_by(subsystem="block")
         monitor.start()
 
-        log.info("Watching for new block devices (USB drives, pendrives)...")
+        self._scan_existing(ctx)
+
+        log.info("Watching for new block devices (USB drives, SD cards)...")
         for device in iter(monitor.poll, None):
             if device.action != "add":
                 continue
-            if device.get("DEVTYPE") != "partition":
-                continue
-            if not device.get("ID_FS_TYPE"):
-                continue
-            if device.get("ID_BUS") not in ("usb", "ata", "scsi", None):
+            if not self._matches(device):
                 continue
             try:
-                self._handle(device)
+                self._handle(device, settle=True)
             except Exception:
                 log.exception("Error handling device %s", device.device_node)
 
-    def _handle(self, device: pyudev.Device) -> None:
+    def _scan_existing(self, ctx: pyudev.Context) -> None:
+        log.info("Scanning currently-present USB/SD partitions...")
+        found = 0
+        for device in ctx.list_devices(subsystem="block", DEVTYPE="partition"):
+            if not self._matches(device):
+                continue
+            found += 1
+            try:
+                self._handle(device, settle=False)
+            except Exception:
+                log.exception("Error handling existing device %s", device.device_node)
+        log.info("Initial scan done (%d device(s) processed).", found)
+
+    def _matches(self, device: pyudev.Device) -> bool:
+        if device.get("DEVTYPE") != "partition":
+            return False
+        if not device.get("ID_FS_TYPE"):
+            return False
+        if device.get("ID_BUS") not in ALLOWED_BUSES:
+            return False
+        return True
+
+    def _handle(self, device: pyudev.Device, settle: bool) -> None:
         dev_node = device.device_node
         fs_type = device.get("ID_FS_TYPE", "?")
         label = device.get("ID_FS_LABEL", "")
         uuid = device.get("ID_FS_UUID", "nouuid")
-        log.info("New partition: %s (fs=%s label=%r uuid=%s)", dev_node, fs_type, label, uuid)
+        log.info(
+            "Partition: %s (fs=%s label=%r uuid=%s bus=%s)",
+            dev_node,
+            fs_type,
+            label,
+            uuid,
+            device.get("ID_BUS"),
+        )
 
-        time.sleep(self._settle)
+        if settle:
+            time.sleep(self._settle)
 
         mount_point = self._existing_mount(dev_node)
+        if mount_point is not None and str(mount_point) == "/":
+            log.info("Skipping rootfs mount %s", dev_node)
+            return
+
         we_mounted: Optional[Path] = None
         if mount_point is None:
             mount_point = self._mount(dev_node, uuid, fs_type)
             we_mounted = mount_point
 
         if mount_point is None:
-            log.warning("Could not access %s; skipping", dev_node)
+            self._tg.send(
+                f"⚠️ Disco detectado en <code>{esc(dev_node)}</code> "
+                f"(fs={esc(fs_type)}, label={esc(label) or '—'}) "
+                "pero no se pudo montar. Mirá los logs con "
+                "<code>journalctl -u yt-uploader -n 50</code>."
+            )
             return
 
         try:

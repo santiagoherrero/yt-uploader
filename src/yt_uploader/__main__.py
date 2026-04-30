@@ -20,6 +20,24 @@ def _setup_logging() -> None:
     )
 
 
+def _cleanup_staging(staging_dir: Path, log: logging.Logger) -> None:
+    if not staging_dir.exists():
+        return
+    cleaned = 0
+    for entry in staging_dir.iterdir():
+        if not entry.is_file():
+            continue
+        try:
+            size = entry.stat().st_size
+            entry.unlink()
+            cleaned += 1
+            log.info("Cleaned stale staging file: %s (%.0f MB)", entry.name, size / (1024 * 1024))
+        except OSError:
+            log.exception("Failed to clean staging file %s", entry)
+    if cleaned:
+        log.info("Removed %d stale staging file(s)", cleaned)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="YouTube auto-uploader daemon")
     parser.add_argument(
@@ -65,8 +83,16 @@ def main() -> None:
         processor.process_mount(args.scan)
         return
 
+    _cleanup_staging(cfg.paths.staging_dir, log)
+
+    telegram.send(
+        "🟢 <b>yt-uploader iniciado</b>\n"
+        "Listo para procesar discos USB / tarjetas SD."
+    )
+
     watcher = DiskWatcher(
         processor=processor,
+        telegram=telegram,
         settle_seconds=cfg.detection.mount_settle_seconds,
         read_only=cfg.detection.read_only_mount,
     )

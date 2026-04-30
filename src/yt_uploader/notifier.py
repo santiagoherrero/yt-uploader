@@ -1,3 +1,4 @@
+import html
 import logging
 from typing import Optional
 
@@ -10,6 +11,10 @@ def progress_bar(pct: int, width: int = 10) -> str:
     pct = max(0, min(100, pct))
     filled = pct * width // 100
     return "█" * filled + "░" * (width - filled)
+
+
+def esc(value: object) -> str:
+    return html.escape(str(value), quote=False)
 
 
 class TelegramNotifier:

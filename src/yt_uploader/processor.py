@@ -2,14 +2,17 @@ import logging
 import shutil
 from datetime import datetime
 from pathlib import Path
+from typing import Callable, Optional
 
 from .config import Config
 from .fingerprint import compute as compute_fingerprint
-from .notifier import TelegramNotifier, progress_bar
+from .notifier import TelegramNotifier, esc, progress_bar
 from .state import State
 from .youtube import AuthError, YouTubeUploader
 
 log = logging.getLogger(__name__)
+
+COPY_CHUNK = 4 * 1024 * 1024
 
 
 class Processor:
@@ -41,20 +44,20 @@ class Processor:
 
         if not videos:
             self._tg.send(
-                f"📂 Disco detectado en <code>{mount_path}</code>\n"
+                f"📂 Disco detectado en <code>{esc(mount_path)}</code>\n"
                 "No se encontraron archivos de video."
             )
             return
 
         if not new_items:
             self._tg.send(
-                f"📂 Disco detectado en <code>{mount_path}</code>\n"
+                f"📂 Disco detectado en <code>{esc(mount_path)}</code>\n"
                 f"Todos los videos ({len(videos)}) ya están subidos."
             )
             return
 
         self._tg.send(
-            f"📂 Disco detectado en <code>{mount_path}</code>\n"
+            f"📂 Disco detectado en <code>{esc(mount_path)}</code>\n"
             f"<b>{len(new_items)}</b> video(s) nuevo(s) para subir."
         )
 
@@ -65,14 +68,15 @@ class Processor:
                 log.exception("Auth error during upload")
                 self._tg.send(
                     "🔑 <b>Error de autenticación de YouTube</b>\n"
-                    f"{e}\n\n"
+                    f"<pre>{esc(e)}</pre>\n"
                     "Re-ejecutá <code>yt-uploader-auth</code> y reiniciá el servicio."
                 )
                 return
             except Exception as e:
                 log.exception("Upload failed for %s", path)
                 self._tg.send(
-                    f"❌ Error subiendo <code>{path.name}</code>:\n<pre>{e}</pre>"
+                    f"❌ Error subiendo <code>{esc(path.name)}</code>:\n"
+                    f"<pre>{esc(e)}</pre>"
                 )
 
     def _scan(self, mount_path: Path) -> list[Path]:
@@ -106,44 +110,58 @@ class Processor:
     ) -> None:
         title = self._title_for(source)
         prefix = f"[{idx}/{total}] " if total > 1 else ""
-        size_mb = source.stat().st_size / (1024 * 1024)
+        size_bytes = source.stat().st_size
+        size_mb = size_bytes / (1024 * 1024)
 
         msg_id = self._tg.send(
-            f"🎥 {prefix}<b>{title}</b>\n"
-            f"Origen: <code>{source.name}</code> ({size_mb:.0f} MB)\n"
-            "Copiando del disco a la mini PC..."
+            f"🎥 {esc(prefix)}<b>{esc(title)}</b>\n"
+            f"Origen: <code>{esc(source.name)}</code> ({size_mb:.0f} MB)\n"
+            f"Copiando: {progress_bar(0)} 0%"
         )
 
         staging_dir = self._cfg.paths.staging_dir
         staging_dir.mkdir(parents=True, exist_ok=True)
+
+        free = shutil.disk_usage(staging_dir).free
+        if free < size_bytes + 256 * 1024 * 1024:
+            need_mb = size_bytes / (1024 * 1024)
+            free_mb = free / (1024 * 1024)
+            self._tg.edit(
+                msg_id,
+                f"❌ {esc(prefix)}<b>{esc(title)}</b>\n"
+                f"Sin espacio en la mini PC para staging.\n"
+                f"Necesarios: {need_mb:.0f} MB · Libres: {free_mb:.0f} MB",
+            )
+            raise OSError(
+                f"Insufficient disk space at {staging_dir}: "
+                f"need {size_bytes}, have {free}"
+            )
+
         staging = staging_dir / source.name
         try:
-            shutil.copy2(source, staging)
+            self._copy_with_progress(
+                source,
+                staging,
+                self._make_progress_reporter(
+                    msg_id,
+                    label=f"🎥 {esc(prefix)}<b>{esc(title)}</b>\nCopiando",
+                ),
+            )
         except Exception as e:
             self._tg.edit(
                 msg_id,
-                f"❌ {prefix}<b>{title}</b>\nFallo al copiar: <pre>{e}</pre>",
+                f"❌ {esc(prefix)}<b>{esc(title)}</b>\n"
+                f"Fallo al copiar: <pre>{esc(e)}</pre>",
             )
+            staging.unlink(missing_ok=True)
             raise
 
         try:
             self._tg.edit(
                 msg_id,
-                f"🎥 {prefix}<b>{title}</b>\n"
+                f"🎥 {esc(prefix)}<b>{esc(title)}</b>\n"
                 f"Subiendo: {progress_bar(0)} 0%",
             )
-
-            step = max(1, self._cfg.upload.progress_step_pct)
-            last_reported = {"pct": -step}
-
-            def on_progress(pct: int) -> None:
-                if pct - last_reported["pct"] >= step or pct >= 100:
-                    last_reported["pct"] = pct
-                    self._tg.edit(
-                        msg_id,
-                        f"🎥 {prefix}<b>{title}</b>\n"
-                        f"Subiendo: {progress_bar(pct)} {pct}%",
-                    )
 
             video_id = self._yt.upload(
                 file_path=staging,
@@ -152,7 +170,10 @@ class Processor:
                 privacy=self._cfg.youtube.default_privacy,
                 category_id=self._cfg.youtube.category_id,
                 made_for_kids=self._cfg.youtube.made_for_kids,
-                on_progress=on_progress,
+                on_progress=self._make_progress_reporter(
+                    msg_id,
+                    label=f"🎥 {esc(prefix)}<b>{esc(title)}</b>\nSubiendo",
+                ),
             )
 
             self._state.record(fingerprint, source.name, video_id, title)
@@ -160,11 +181,45 @@ class Processor:
             url = f"https://youtu.be/{video_id}"
             self._tg.edit(
                 msg_id,
-                f"✅ {prefix}<b>{title}</b>\n"
-                f"Subido como <i>{self._cfg.youtube.default_privacy}</i>: {url}",
+                f"✅ {esc(prefix)}<b>{esc(title)}</b>\n"
+                f"Subido como <i>{esc(self._cfg.youtube.default_privacy)}</i>: {url}",
             )
         finally:
             try:
                 staging.unlink(missing_ok=True)
             except OSError:
                 log.exception("Failed to delete staging file %s", staging)
+
+    def _make_progress_reporter(
+        self,
+        msg_id: Optional[int],
+        label: str,
+    ) -> Callable[[int], None]:
+        step = max(1, self._cfg.upload.progress_step_pct)
+        last = {"pct": -step}
+
+        def report(pct: int) -> None:
+            if pct - last["pct"] >= step or pct >= 100:
+                last["pct"] = pct
+                self._tg.edit(msg_id, f"{label}: {progress_bar(pct)} {pct}%")
+
+        return report
+
+    def _copy_with_progress(
+        self,
+        src: Path,
+        dst: Path,
+        on_progress: Callable[[int], None],
+    ) -> None:
+        size = src.stat().st_size
+        copied = 0
+        with src.open("rb") as fs, dst.open("wb") as fd:
+            while True:
+                buf = fs.read(COPY_CHUNK)
+                if not buf:
+                    break
+                fd.write(buf)
+                copied += len(buf)
+                if size > 0:
+                    on_progress(int(copied * 100 / size))
+        shutil.copystat(src, dst)

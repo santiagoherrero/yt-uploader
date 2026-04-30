@@ -6,7 +6,7 @@ token_path = "/etc/yt-uploader/token.json"
 default_privacy = "private"          # private | unlisted | public
 title_template = "Prédica – {date}"  # {date} is YYYY-MM-DD from file mtime
 description = ""
-category_id = "29"                   # 29 = Nonprofits & Activism, 22 = People & Blogs
+category_id = "22"                   # 22 = People & Blogs (safe default). 29 = Nonprofits requires verified-nonprofit channel.
 made_for_kids = false
 
 [telegram]
