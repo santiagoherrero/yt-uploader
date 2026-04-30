@@ -18,113 +18,54 @@ en privado y te avisa por Telegram con el progreso.
 6. Telegram: un mensaje por video que se va editando con el progreso (cada 10%)
    y termina con el link al video.
 
-## Setup
+## Instalación
 
-### 1. Cuenta de YouTube y proyecto en Google Cloud
-
-Recomendado: creá un Gmail dedicado (ej. `iglesia.uploader@gmail.com`) y dale
-acceso de **Manager** al canal de la iglesia desde
-[YouTube Studio → Settings → Permissions](https://studio.youtube.com).
-
-Después, con ese Gmail:
-
-1. Andá a [Google Cloud Console](https://console.cloud.google.com) y creá un proyecto.
-2. APIs & Services → **Library** → habilitá **YouTube Data API v3**.
-3. APIs & Services → **OAuth consent screen** → User Type **External** → completá
-   los datos mínimos. Agregá tu Gmail como **Test user**.
-4. APIs & Services → **Credentials** → **Create Credentials** → **OAuth client ID**
-   → Application type **Desktop app**. Descargá el JSON como `client_secret.json`.
-
-> ⚠️ La app queda en modo "Testing". Para el scope `youtube.upload` (sensitive),
-> los refresh tokens vencen cada 7 días. En la práctica, si usás el servicio al
-> menos una vez por semana, el token se mantiene activo. Si vence, vas a recibir
-> un aviso por Telegram y tenés que correr `yt-uploader-auth` de nuevo.
-
-### 2. Bot de Telegram
-
-1. Abrí [@BotFather](https://t.me/BotFather), `/newbot`, seguí los pasos. Anotá el **token**.
-2. Mandale un mensaje cualquiera a tu nuevo bot desde tu cuenta personal.
-3. Conseguí tu `chat_id`:
+Todo se hace por SSH, sin browser en la mini PC.
 
 ```bash
-curl "https://api.telegram.org/bot<TOKEN>/getUpdates" | python3 -m json.tool
+# 1. Cloná el repo en la mini PC
+git clone <URL_DEL_REPO> /opt/yt-uploader/src
+cd /opt/yt-uploader/src
+
+# 2. Corré el instalador (apt deps, venv, systemd unit)
+sudo ./install.sh
+
+# 3. Corré el wizard interactivo (guía completa para credenciales y config)
+sudo /opt/yt-uploader/venv/bin/yt-uploader-setup
 ```
 
-   Buscá `"chat":{"id":...}` en la respuesta.
+El wizard te pide:
+- Path al `client_secret.json` que descargaste de Google Cloud (paso a paso te
+  dice cómo crearlo si no lo tenés todavía).
+- Te abre el flow OAuth con instrucciones claras para hacer port-forward por SSH
+  desde tu laptop (porque la mini PC no tiene browser).
+- El token del bot de Telegram (te dice cómo crearlo con @BotFather).
+- **Detecta el `chat_id` solo** — solo tenés que mandarle un mensaje al bot
+  desde tu cuenta y el wizard lo captura.
+- Privacidad por defecto, plantilla de título, categoría, descripción.
+- Habilita y arranca el servicio.
 
-### 3. Instalar en la mini PC (Ubuntu Server)
+Al final tenés todo corriendo y deberías recibir un mensaje
+"🟢 yt-uploader iniciado" en Telegram.
 
-```bash
-sudo apt update
-sudo apt install -y python3-venv python3-pip git
+### Requisitos previos en navegador (no automatizable)
 
-sudo mkdir -p /opt/yt-uploader /etc/yt-uploader /var/lib/yt-uploader/staging
-sudo git clone <ESTE_REPO> /opt/yt-uploader/src
-sudo python3 -m venv /opt/yt-uploader/venv
-sudo /opt/yt-uploader/venv/bin/pip install -e /opt/yt-uploader/src
-```
+El wizard te lleva paso a paso por estos dos setups que necesariamente requieren
+hacer clicks en una web:
 
-### 4. Generar el token OAuth
+1. **Proyecto en Google Cloud + OAuth client** — el wizard te muestra los pasos
+   exactos. Recomendado: creá un Gmail dedicado y dale acceso de **Manager** al
+   canal de la iglesia desde
+   [YouTube Studio → Settings → Permissions](https://studio.youtube.com).
+2. **Bot de Telegram** — `/newbot` en [@BotFather](https://t.me/BotFather).
 
-El flujo OAuth necesita un browser. Tenés dos opciones:
+> ⚠️ La app de Google Cloud queda en modo "Testing". Para el scope `youtube.upload`,
+> los refresh tokens vencen cada 7 días. En la práctica, si subís al menos un
+> video por semana, el token se mantiene activo. Si vence, vas a recibir un aviso
+> por Telegram y volvés a correr el wizard (el setup de Telegram lo podés
+> saltear, solo te re-autenticás con Google).
 
-**A) Hacerlo en otra máquina con browser** (recomendado):
-
-```bash
-# en tu laptop/desktop con browser
-git clone <ESTE_REPO> /tmp/yt-uploader
-cd /tmp/yt-uploader
-python3 -m venv .venv && . .venv/bin/activate
-pip install -e .
-yt-uploader-auth ./client_secret.json ./token.json
-# Se abre el browser, autorizás, vuelve a la terminal con "Token saved to ./token.json"
-```
-
-Después copiá los dos archivos a la mini PC:
-
-```bash
-scp client_secret.json token.json minipc:/tmp/
-ssh minipc 'sudo mv /tmp/client_secret.json /tmp/token.json /etc/yt-uploader/ && sudo chmod 600 /etc/yt-uploader/{client_secret,token}.json'
-```
-
-**B) Directo en la mini PC vía SSH con port-forward**:
-
-```bash
-# desde tu laptop
-ssh -L 8080:localhost:8080 minipc
-
-# en la mini PC, dentro del venv:
-sudo /opt/yt-uploader/venv/bin/yt-uploader-auth \
-    /etc/yt-uploader/client_secret.json \
-    /etc/yt-uploader/token.json \
-    --port 8080
-```
-
-Copiá el link que imprime y abrilo en tu browser local.
-
-### 5. Configurar
-
-```bash
-sudo cp /opt/yt-uploader/src/config.example.toml /etc/yt-uploader/config.toml
-sudo nano /etc/yt-uploader/config.toml
-# Pegá bot_token y chat_id de Telegram, ajustá lo que quieras.
-sudo chmod 600 /etc/yt-uploader/config.toml
-```
-
-### 6. Instalar y arrancar el servicio
-
-```bash
-sudo cp /opt/yt-uploader/src/systemd/yt-uploader.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now yt-uploader
-sudo systemctl status yt-uploader
-journalctl -u yt-uploader -f
-```
-
-## Probar
-
-Sin esperar a un disco real, podés correr una pasada manual contra cualquier
-carpeta para verificar que los uploads funcionan:
+## Probar sin esperar a un disco real
 
 ```bash
 sudo /opt/yt-uploader/venv/bin/yt-uploader \
@@ -132,11 +73,21 @@ sudo /opt/yt-uploader/venv/bin/yt-uploader \
     --scan /ruta/a/carpeta/con/un/video
 ```
 
+## Operación
+
+| Acción | Comando |
+| --- | --- |
+| Ver logs en vivo | `sudo journalctl -u yt-uploader -f` |
+| Estado del servicio | `sudo systemctl status yt-uploader` |
+| Reiniciar | `sudo systemctl restart yt-uploader` |
+| Re-configurar | `sudo /opt/yt-uploader/venv/bin/yt-uploader-setup` |
+| Re-autenticar YouTube | mismo wizard, te detecta lo ya hecho y solo hace el OAuth de nuevo |
+
 ## Archivos y rutas
 
 | Qué | Dónde |
 | --- | --- |
-| Código | `/opt/yt-uploader/src` |
+| Código fuente | `/opt/yt-uploader/src` |
 | venv | `/opt/yt-uploader/venv` |
 | Config | `/etc/yt-uploader/config.toml` |
 | OAuth client | `/etc/yt-uploader/client_secret.json` |
@@ -152,7 +103,8 @@ sudo /opt/yt-uploader/venv/bin/yt-uploader \
 - Los discos se montan en **read-only** por defecto. Configurable en `config.toml`.
 - Si Ubuntu (vía `udisks2`) ya monta el disco automáticamente, lo detectamos y
   reusamos ese mount point en vez de montar uno nuevo.
-- El staging se borra inmediatamente después de un upload exitoso.
+- El staging se borra inmediatamente después de un upload exitoso. También
+  se limpia al arrancar el servicio (recovery de uploads interrumpidos).
 - Cuota de YouTube API: cada upload consume ~1600 unidades; el límite por
   defecto del proyecto son 10.000/día (≈6 uploads). Más que suficiente para una
   prédica semanal.
