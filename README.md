@@ -24,7 +24,7 @@ Todo se hace por SSH, sin browser en la mini PC.
 
 ```bash
 # 1. Cloná el repo en la mini PC
-git clone <URL_DEL_REPO> /opt/yt-uploader/src
+git clone https://github.com/santiagoherrero/yt-uploader.git /opt/yt-uploader/src
 cd /opt/yt-uploader/src
 
 # 2. Corré el instalador (apt deps, venv, systemd unit)
