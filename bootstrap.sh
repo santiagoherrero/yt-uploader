@@ -19,19 +19,19 @@ SRC_DIR="/opt/yt-uploader/src"
 
 if ! command -v git >/dev/null 2>&1; then
     echo "==> Instalando git..."
-    apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y git
 fi
 
 if [ -d "$SRC_DIR/.git" ]; then
     echo "==> Repo ya existe en $SRC_DIR, actualizando..."
-    git -C "$SRC_DIR" fetch --quiet origin "$REPO_BRANCH"
-    git -C "$SRC_DIR" checkout --quiet "$REPO_BRANCH"
-    git -C "$SRC_DIR" pull --ff-only --quiet
+    git -C "$SRC_DIR" fetch origin "$REPO_BRANCH"
+    git -C "$SRC_DIR" checkout "$REPO_BRANCH"
+    git -C "$SRC_DIR" pull --ff-only
 else
     echo "==> Clonando repo en $SRC_DIR..."
     mkdir -p "$(dirname "$SRC_DIR")"
-    git clone --branch "$REPO_BRANCH" --quiet "$REPO_URL" "$SRC_DIR"
+    git clone --branch "$REPO_BRANCH" --progress "$REPO_URL" "$SRC_DIR"
 fi
 
 "$SRC_DIR/install.sh"

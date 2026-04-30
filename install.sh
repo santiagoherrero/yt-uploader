@@ -9,8 +9,8 @@ fi
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "==> Instalando dependencias del sistema..."
-apt-get update -qq
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+apt-get update
+DEBIAN_FRONTEND=noninteractive apt-get install -y \
     python3-venv python3-pip
 
 echo "==> Creando directorios..."
