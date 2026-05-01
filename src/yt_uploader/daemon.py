@@ -110,7 +110,16 @@ class DiskWatcher:
             self._processor.process_mount(mount_point)
         finally:
             if we_mounted is not None:
-                self._unmount(we_mounted)
+                ok = self._unmount(we_mounted)
+                if ok:
+                    self._tg.send(
+                        "🔌 Disco desmontado. Ya podés desenchufarlo."
+                    )
+                else:
+                    self._tg.send(
+                        "⚠️ No pude desmontar el disco automáticamente. "
+                        "Esperá unos segundos y revisá los logs antes de desenchufar."
+                    )
 
     def _existing_mount(self, dev_node: str) -> Optional[Path]:
         try:
@@ -140,14 +149,15 @@ class DiskWatcher:
                 pass
             return None
 
-    def _unmount(self, mount_point: Path) -> None:
+    def _unmount(self, mount_point: Path) -> bool:
         try:
             subprocess.run(["umount", str(mount_point)], check=True, capture_output=True, text=True)
             log.info("Unmounted %s", mount_point)
         except subprocess.CalledProcessError as e:
             log.warning("umount %s failed: %s", mount_point, e.stderr.strip())
-            return
+            return False
         try:
             mount_point.rmdir()
         except OSError:
             pass
+        return True
