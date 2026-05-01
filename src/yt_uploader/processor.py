@@ -7,6 +7,7 @@ from typing import Callable, Optional
 from .config import Config
 from .fingerprint import compute as compute_fingerprint
 from .notifier import TelegramNotifier, esc, progress_bar
+from .selector import VideoSelector
 from .state import State
 from .youtube import AuthError, YouTubeUploader
 
@@ -22,11 +23,13 @@ class Processor:
         state: State,
         youtube: YouTubeUploader,
         telegram: TelegramNotifier,
+        selector: VideoSelector,
     ) -> None:
         self._cfg = config
         self._state = state
         self._yt = youtube
         self._tg = telegram
+        self._selector = selector
 
     def process_mount(self, mount_path: Path) -> None:
         videos = self._scan(mount_path)
@@ -56,14 +59,25 @@ class Processor:
             )
             return
 
-        self._tg.send(
-            f"📂 Disco detectado en <code>{esc(mount_path)}</code>\n"
-            f"<b>{len(new_items)}</b> video(s) nuevo(s) para subir."
-        )
+        if self._cfg.selection.enabled:
+            selected_idx = self._selector.choose(
+                new_items,
+                mount_path,
+                self._cfg.selection.timeout_seconds,
+            )
+            if not selected_idx:
+                return
+            to_upload = [new_items[i] for i in selected_idx]
+        else:
+            self._tg.send(
+                f"📂 Disco detectado en <code>{esc(mount_path)}</code>\n"
+                f"<b>{len(new_items)}</b> video(s) nuevo(s) para subir."
+            )
+            to_upload = new_items
 
-        for idx, (path, fp) in enumerate(new_items, start=1):
+        for idx, (path, fp) in enumerate(to_upload, start=1):
             try:
-                self._upload_one(path, fp, idx, len(new_items))
+                self._upload_one(path, fp, idx, len(to_upload))
             except AuthError as e:
                 log.exception("Auth error during upload")
                 self._tg.send(

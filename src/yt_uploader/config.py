@@ -41,12 +41,19 @@ class UploadConfig:
 
 
 @dataclass(frozen=True)
+class SelectionConfig:
+    enabled: bool
+    timeout_seconds: int
+
+
+@dataclass(frozen=True)
 class Config:
     youtube: YouTubeConfig
     telegram: TelegramConfig
     paths: PathsConfig
     detection: DetectionConfig
     upload: UploadConfig
+    selection: SelectionConfig
 
 
 def load(path: Path) -> Config:
@@ -58,6 +65,7 @@ def load(path: Path) -> Config:
     pa = raw["paths"]
     de = raw["detection"]
     up = raw["upload"]
+    se = raw.get("selection", {})
 
     return Config(
         youtube=YouTubeConfig(
@@ -88,5 +96,9 @@ def load(path: Path) -> Config:
             chunk_size_bytes=int(up.get("chunk_size_mb", 8)) * 1024 * 1024,
             progress_step_pct=int(up.get("progress_step_pct", 10)),
             max_retries=int(up.get("max_retries", 5)),
+        ),
+        selection=SelectionConfig(
+            enabled=bool(se.get("enabled", True)),
+            timeout_seconds=int(se.get("timeout_seconds", 600)),
         ),
     )

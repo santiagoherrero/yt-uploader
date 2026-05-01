@@ -26,3 +26,7 @@ read_only_mount      = true          # mount external disks read-only when we mo
 chunk_size_mb        = 8
 progress_step_pct    = 10            # edit Telegram message every N% progress
 max_retries          = 5
+
+[selection]
+enabled         = true               # Pedir confirmación por Telegram antes de subir
+timeout_seconds = 600                # Si no respondés en este tiempo: sube todos los nuevos

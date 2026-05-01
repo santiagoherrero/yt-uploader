@@ -7,6 +7,7 @@ from . import config as config_mod
 from .daemon import DiskWatcher
 from .notifier import TelegramNotifier
 from .processor import Processor
+from .selector import VideoSelector
 from .state import State
 from .youtube import AuthError, YouTubeUploader
 
@@ -77,7 +78,8 @@ def main() -> None:
         telegram.send(f"🔑 yt-uploader no pudo arrancar: {e}")
         sys.exit(2)
 
-    processor = Processor(cfg, state, youtube, telegram)
+    selector = VideoSelector(telegram)
+    processor = Processor(cfg, state, youtube, telegram, selector)
 
     if args.scan is not None:
         processor.process_mount(args.scan)

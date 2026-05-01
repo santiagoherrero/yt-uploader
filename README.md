@@ -13,10 +13,28 @@ en privado y te avisa por Telegram con el progreso.
 3. Escanea recursivamente buscando archivos de video.
 4. Por cada archivo calcula un fingerprint (`SHA-256` de los primeros 10 MB +
    tamaño). Si ya está en `uploaded.json`, se saltea.
-5. Para los nuevos: copia a `/var/lib/yt-uploader/staging/`, sube a YouTube
-   con upload resumable, registra el `video_id` y borra el archivo local.
-6. Telegram: un mensaje por video que se va editando con el progreso (cada 10%)
+5. Para los nuevos: te manda un mensaje a Telegram con la lista de videos
+   nuevos y un teclado para tildar cuáles querés subir (ver "Selección manual"
+   abajo). Si no respondés en 10 min, los sube todos.
+6. Para los seleccionados: copia a `/var/lib/yt-uploader/staging/`, sube a
+   YouTube con upload resumable, registra el `video_id` y borra el archivo local.
+7. Telegram: un mensaje por video que se va editando con el progreso (cada 10%)
    y termina con el link al video.
+
+## Selección manual
+
+Cuando enchufás un disco con varios videos nuevos (por ejemplo un pendrive con
+material acumulado), no querés que se suban todos. El servicio te manda un
+mensaje a Telegram listando solo los videos nuevos (los que ya subiste no
+aparecen) con un botón por cada uno. Tocás los que querés subir y "✅ Confirmar".
+
+- Los videos ya subidos se filtran por fingerprint, no se listan.
+- Si no respondés en `selection.timeout_seconds` (default 10 min), se suben
+  todos los nuevos como red de seguridad.
+- Si tocás "✖️ Cancelar" no se sube nada; los videos siguen marcados como
+  nuevos y van a volver a aparecer la próxima vez que enchufes el disco.
+- Para volver al comportamiento viejo (subir todo automáticamente), poné
+  `enabled = false` en `[selection]` del `config.toml`.
 
 ## Instalación
 
