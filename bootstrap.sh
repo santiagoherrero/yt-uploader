@@ -39,4 +39,4 @@ fi
 echo
 echo "==> Iniciando el wizard de configuración..."
 echo
-exec /opt/yt-uploader/venv/bin/yt-uploader-setup
+exec /opt/yt-uploader/venv/bin/yt-uploader-setup < /dev/tty
