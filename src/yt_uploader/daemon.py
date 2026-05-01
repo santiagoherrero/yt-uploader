@@ -64,9 +64,11 @@ class DiskWatcher:
             return False
         if not device.get("ID_FS_TYPE"):
             return False
-        if device.get("ID_BUS") not in ALLOWED_BUSES:
-            return False
-        return True
+        if device.get("ID_BUS") in ALLOWED_BUSES:
+            return True
+        if device.get("ID_USB_DRIVER") or device.get("ID_USB_TYPE"):
+            return True
+        return False
 
     def _handle(self, device: pyudev.Device, settle: bool) -> None:
         dev_node = device.device_node
